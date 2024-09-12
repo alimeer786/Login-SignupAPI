@@ -25,3 +25,13 @@ class acessDB(models.Model):
 
     def __str__(self):
         return f"{self.e_tag} - {self.p_no}"
+
+# # models.py
+# from django.db import models
+
+# class RegisteredAPI(models.Model):
+#     name = models.CharField(max_length=255, unique=True)
+#     endpoint_url = models.URLField()
+
+#     def __str__(self):
+#         return self.name
