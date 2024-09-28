@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import acessDB
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.http import HttpResponse, HttpResponseBadRequest, Http404
 from django.utils import timezone
 from django.core.exceptions import FieldDoesNotExist
 from django.views import View
@@ -12,6 +12,15 @@ from django.templatetags.static import static
 from django.db.models import Sum
 from .utils import generate_multiple_projects_erection_report
 
+from django.shortcuts import render
+from datetime import datetime
+from django.template.loader import render_to_string
+from weasyprint import HTML, CSS
+
+
+# -----------------------------------
+# Views for Perfoming CRUD Operations
+# -----------------------------------
 
 class acessDBCreateView(generics.ListCreateAPIView):
     queryset = acessDB.objects.all()
@@ -26,6 +35,11 @@ class UpdateAcessDBView(generics.UpdateAPIView):
     serializer_class = UpdateAcessDBSerializer
     lookup_field = 'id'
 
+
+# ----------------------
+# View for Filter Field 
+# ----------------------
+
 class FilterFieldView(APIView):
     def get(self, request, field_name, *args, **kwargs):
         valid_fields = [f.name for f in acessDB._meta.get_fields()]
@@ -36,7 +50,9 @@ class FilterFieldView(APIView):
         field_values = acessDB.objects.values_list(field_name, flat=True)
         return Response(list(field_values))
 
-
+# ---------------------------------------------------------
+# View for Muliple Projects Erection Report with WeasyPrint
+# ---------------------------------------------------------
 
 class MultipleProjectsErectionReportView(APIView):
     def get(self, request):
@@ -103,540 +119,28 @@ class MultipleProjectsErectionReportView(APIView):
 
         return response
 
-from django.http import HttpResponse
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.graphics.shapes import Drawing, Line
-from reportlab.lib.units import inch
-from datetime import datetime
-from .models import acessDB
 
-import arabic_reshaper
+# -----------------------------------------
+# View for Technical Transmittal with WeasyPrint
+# -----------------------------------------
 
-def create_line(width=1.0, height=0.05, color=colors.black):
-    drawing = Drawing(width, height)
-    drawing.add(Line(0, 0, width, 0, strokeColor=color))
-    return drawing
 
-
-def TechnicalTransmittalFormView(request):
-    # Fetch data from the database
-    data = acessDB.objects.all()
-
-    # Set up the HttpResponse with the PDF response type
-    response = HttpResponse(content_type='application/pdf')
-    response['Content-Disposition'] = 'attachment; filename="transmittal_report.pdf"'
-
-    # Create a document and set page size
-    doc = SimpleDocTemplate(response, pagesize=A4)
-    elements = []
-
-    # Load styles and update if needed
-    styles = getSampleStyleSheet()
-    if 'Title' in styles:
-        styles['Title'].fontName = 'Helvetica-Bold'
-        styles['Title'].fontSize = 16
-        styles['Title'].spaceAfter = 12
-    else:
-        styles.add(ParagraphStyle(name='Title', fontName='Helvetica-Bold', fontSize=16, spaceAfter=12))
-
-    if 'Normal' in styles:
-        styles['Normal'].fontName = 'Helvetica'
-        styles['Normal'].fontSize = 10
-
-    # Logos paths
-    logo_path_left = "C:/Users/alime/Proj1/apilogin/acessDB/static/images/logo1.png"
-    logo_path_right = "C:/Users/alime/Proj1/apilogin/acessDB/static/images/logo2.png"
-
-    # Load logos
-    left_logo = Image(logo_path_left, width=50, height=50)
-    right_logo = Image(logo_path_right, width=50, height=50)
-
-    # Create header with logos and text
-    header_table_data = [
-        [right_logo,
-         Table([
-             [Paragraph("لحلول الخرسانية المبتكرة ذ م م", ParagraphStyle(name='ArabicTitle', fontName='Helvetica-Bold', fontSize=16, alignment=1))],
-             [Paragraph("Innovative Concrete Solutions", styles['Title'])],
-             [Paragraph("Technical Transmittal Form", styles['Title'])],
-         ], colWidths=[None], spaceBefore=5, spaceAfter=5),
-         left_logo]
-    ]
-
-    header_table = Table(header_table_data, colWidths=[1.5 * inch, None, 1.5 * inch])
-    header_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-    ]))
-    
-    elements.append(header_table)
-    elements.append(Spacer(1, 0.2 * inch))
-
-    # Add a horizontal line to separate header and table
-    line = create_line(width=doc.width, height=0.05)
-    elements.append(line)
-    elements.append(Spacer(1, 0.2 * inch))
-
-    # Add transmittal details
-    transmittal_info = Table([
-        ['Transmittal Number: 2256', '', 'Transmittal Date: 9/6/2024 11:25:19 PM']
-    ], colWidths=[200, 140, 200])
-    transmittal_info.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-    ]))
-    elements.append(transmittal_info)
-
-    # Title
-    title = Paragraph("Technical Transmittal Form", styles['Title'])
-    elements.append(title)
-
-    # Add a spacer
-    elements.append(Spacer(1, 12))
-
-    # Table data
-    table_data = [
-        ['Project', 'Element Tag', 'Rev.', 'Rev. Date', 'Quantity', 'Casting Factory', 'Volume (CM)'],  # Header
-    ]
-
-    transmittal_number = 2256
-
-    # Populate table with dynamic data
-    for entry in data:
-        row = [
-            entry.p_no,
-            entry.e_tag,
-            entry.rev,
-            entry.issue.strftime('%m/%d/%Y'),
-            entry.qty,
-            "AHCC UAQ",  # Assuming a static value for "Casting Factory"
-            entry.vol,
-        ]
-        table_data.append(row)
-
-    # Create table with style
-    table = Table(table_data, colWidths=[60, 120, 40, 80, 60, 100, 60])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),  # Header row background
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),  # Header row text color
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),  # Header row font
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),  # Header row padding
-    ]))
-
-    # Add table to the document elements
-    elements.append(table)
-
-    # Summary Section
-    total_volume = sum([entry.vol for entry in data])
-    elements.append(Paragraph(f"Issued Elements for Project {data[0].p_no if data else ''}: (3 Elements) with a Total Volume of: {total_volume:.2f}", styles['Normal']))
-    
-    # Add a line and a spacer
-    elements.append(create_line(width=doc.width))
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Paragraph("Count of Drawings: 2", styles['Normal']))
-    
-    # Add a line and a spacer
-    elements.append(create_line(width=doc.width))
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Paragraph(f"Total Volume in factory: {total_volume:.3f}", styles['Normal']))
-    
-    # Add a line and a spacer
-    elements.append(create_line(width=doc.width))
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Paragraph(f"Grand Total Volume: {total_volume:.3f}", styles['Normal']))
-    
-    # Add a line and a spacer
-    elements.append(create_line(width=doc.width))
-    elements.append(Spacer(1, 12))
-    
-    # Additional Information Section
-    elements.append(Paragraph(f"Transmittal Number: {transmittal_number}", styles['Normal']))
-    
-    # Add a line and a spacer
-    elements.append(create_line(width=doc.width))
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Paragraph("All drawings related to elements listed above in this transmittal were received as per the date mentioned above:", styles['Normal']))
-    
-    # Add a line and a spacer
-    elements.append(create_line(width=doc.width))
-    elements.append(Spacer(1, 12))
-    
-    # Comments Section
-    elements.append(Paragraph("Comments (If Any):", styles['Normal']))
-    
-    # Add a line and a spacer
-    elements.append(create_line(width=doc.width))
-    elements.append(Spacer(1, 12))
-    
-    elements.append(Spacer(1, 24))
-
-    # Signature Section
-    elements.append(Paragraph("Name of Production Engineer: ____________________    Signature: ____________________", styles['Normal']))
-    
-    # Add a line and a spacer
-    elements.append(create_line(width=doc.width))
-    elements.append(Spacer(1, 12))
-
-    # Footer with current date
-    current_date = datetime.now().strftime('%A, %B %d, %Y')
-    elements.append(Paragraph(current_date, styles['Normal']))
-    elements.append(Spacer(1, 12))
-
-    # Build the PDF
-    doc.build(elements)
-
-    return response
-
-
-
-from django.views import View
-from django.http import HttpResponse
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter, landscape
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from io import BytesIO
-from django.conf import settings
-import os
-
-class ErectionReportView(View):
-    def get(self, request, *args, **kwargs):
-        # Create a file-like buffer to receive PDF data
-        buffer = BytesIO()
-
-        # Create the PDF object, using the buffer as its "file."
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=landscape(letter),
-            rightMargin=36,
-            leftMargin=36,
-            topMargin=36,
-            bottomMargin=18
-        )
-
-        # Container for the 'Flowable' objects
-        elements = []
-
-        # Styles
-        styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(name='Center', alignment=1))
-        styles.add(ParagraphStyle(name='Right', alignment=2))
-        styles.add(ParagraphStyle(name='ArabicTitle', fontName='Helvetica-Bold', fontSize=16, alignment=1))
-
-        # Logos paths
-        logo_path_left = "C:/Users/alime/Proj1/apilogin/acessDB/static/images/logo1.png"
-        logo_path_right = "C:/Users/alime/Proj1/apilogin/acessDB/static/images/logo2.png"
-
-        # Load logos
-        left_logo = Image(logo_path_left, width=50, height=50)
-        right_logo = Image(logo_path_right, width=50, height=50)
-
-        # Create header with logos and text
-        header_table_data = [
-            [right_logo,
-             Table([
-                 [Paragraph("لحلول الخرسانية المبتكرة ذ م م", styles['ArabicTitle'])],
-                 [Paragraph("Innovative Concrete Solutions", styles['Title'])],
-                 [Paragraph("Technical Transmittal Form", styles['Title'])],
-             ], colWidths=[None], spaceBefore=5, spaceAfter=5),
-             left_logo]
-        ]
-
-        header_table = Table(header_table_data, colWidths=[1.5 * inch, None, 1.5 * inch])
-        header_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('LEFTPADDING', (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ]))
-
-        # Add header to elements
-        elements.append(header_table)
-        elements.append(Spacer(1, 0.2 * inch))
-
-        # Add a horizontal line to separate header and table
-        line = Table([['']], colWidths=[doc.width])  # Use doc.width here correctly
-        line.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, 0), 1, colors.black)]))
-        elements.append(line)
-        elements.append(Spacer(1, 0.2 * inch))
-
-        # Add main table (rest of the code remains the same)
-        main_data = [
-            ['PROJECT_NO', 'Element_Tag', 'Rev.', 'Element #', 'Quantity', 'Erection Date', 'Length(mm)'],
-            ['', '', '', '', 'of', '', ''],
-        ]
-        main_table = Table(main_data, colWidths=[1.2 * inch, 1.2 * inch, 0.6 * inch, 1.2 * inch, 1 * inch, 1.5 * inch, 1.3 * inch])
-        main_table.setStyle(TableStyle([
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ]))
-        elements.append(main_table)
-        
-         # Add total row
-        total_row = [['Total Number Of elements : (0 Elements)', '', '', '', '', 'Total Length', '0']]
-        total_table = Table(total_row, colWidths=[1.2*inch, 1.2*inch, 0.6*inch, 1.2*inch, 1*inch, 1.5*inch, 1.3*inch])
-        total_table.setStyle(TableStyle([
-            ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-            ('SPAN', (0,0), (4,0)),
-            ('ALIGN', (-2,-1), (-1,-1), 'RIGHT'),
-        ]))
-        elements.append(total_table)
-        elements.append(Spacer(1, 0.2*inch))
-
-        # Add quality check section
-        quality_data = [
-            ['(For Internal use)', 'Quality of products checked and Approved for Erection By :'],
-            ['', 'Date:____________ Name:____________________ Signature:____________________'],
-            ['', 'Comments (If Any)___________________________________________________________'],
-        ]
-        quality_table = Table(quality_data, colWidths=[2*inch, 6*inch])
-        quality_table.setStyle(TableStyle([
-            ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-            ('SPAN', (0,0), (0,-1)),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ]))
-        elements.append(quality_table)
-        elements.append(Spacer(1, 0.2*inch))
-
-        # Add Erection Engineer Comments section
-        comments = Paragraph("Erection Engineer Comments:", styles['Normal'])
-        elements.append(comments)
-        comments_lines = Table([[''] * 5] * 5, colWidths=[1.6*inch] * 5)
-        comments_lines.setStyle(TableStyle([
-            ('LINEBELOW', (0,-1), (-1,-1), 0.5, colors.black),
-            ('TOPPADDING', (0,0), (-1,-1), 0.2*inch),
-        ]))
-        elements.append(comments_lines)
-        elements.append(Spacer(1, 0.2*inch))
-
-        # Add footer
-        footer_table = Table([
-            [Paragraph("Friday, September 6, 2024", styles['Normal']), Paragraph("Page 1 of 1", styles['Right'])]
-        ], colWidths=[7*inch, 1*inch])
-        elements.append(footer_table)
-
-
-
-
-        # Build the PDF
-        doc.build(elements)
-
-        # Get the value of the BytesIO buffer and write it to the response
-        pdf = buffer.getvalue()
-        buffer.close()
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="erection_report.pdf"'
-        response.write(pdf)
-        return response
-    
-from django.http import HttpResponse
-from django.conf import settings
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.lib.units import inch
-from io import BytesIO
-from bidi.algorithm import get_display
-import os
-
-def ManpowerReportView(request):
-    # Create a file-like buffer to receive PDF data
-    buffer = BytesIO()
-
-    # Create the PDF object, using the buffer as its "file."
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=18)
-
-       # Styles
-    styles = getSampleStyleSheet()
-    
-    # Instead of adding new styles, we'll modify existing ones or create new ones with unique names
-    styles['Title'].alignment = 1  # Center alignment
-    styles['Title'].fontSize = 14
-    
-
-    font_path = r"C:\Users\alime\Proj1\apilogin\acessDB\fonts\Arabic\fonts\AF_DIWAN.TTF"
-    pdfmetrics.registerFont(TTFont('ArabicFont', font_path))
-    
-    
-    # Arabic text reshaping and bidirectional correction
-    arabic_text = "لحلول الخرسانية المبتكرة ذ م م"
-    reshaped_text = arabic_reshaper.reshape(arabic_text)
-    bidi_text = get_display(reshaped_text)
-
-
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title', parent=styles['Title'], fontSize=14, alignment=1, spaceAfter=6)
-    arabic_title_style = ParagraphStyle('ArabicTitle', fontName='ArabicFont', fontSize=16, alignment=1, spaceAfter=6)
-    subtitle_style = ParagraphStyle('Subtitle', parent=styles['Normal'], fontSize=12, alignment=1)
-
-
-    # Logos paths
-    logo_path_left = "C:/Users/alime/Proj1/apilogin/acessDB/static/images/logo1.png"
-    logo_path_right = "C:/Users/alime/Proj1/apilogin/acessDB/static/images/logo2.png"
-    
-
-    # Load logos
-    left_logo = Image(logo_path_left, width=50, height=50)
-    right_logo = Image(logo_path_right, width=50, height=50)
-
-    # Create header with logos and text
-    header_table_data = [
-        [right_logo, 
-         Table([
-             [Paragraph(bidi_text, arabic_title_style)],
-             [Paragraph("Innovative Concrete Solutions", title_style)],
-             [Paragraph("Multiple Projects Erection Report", subtitle_style)],
-         ], colWidths=[None], spaceBefore=5, spaceAfter=5),
-         left_logo]
-    ]
-
-    header_table = Table(header_table_data, colWidths=[1.5 * inch, None, 1.5 * inch])
-    header_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-    ]))
-
-    # Container for the 'Flowable' objects
-    elements = []
-
-    # Add header to elements
-    elements.append(header_table)
-    elements.append(Spacer(1, 0.2 * inch))
-
-    # Add a horizontal line to separate header and table
-    line = Table([['']], colWidths=[doc.width])
-    line.setStyle(TableStyle([('LINEBELOW', (0, 0), (-1, 0), 1, colors.black)]))
-    elements.append(line)
-    elements.append(Spacer(1, 0.2 * inch))
-
-    # Report details
-    report_details = [
-        ['ReportNumber', '744', 'ReportDate', '1/1/2023'],
-    ]
-    report_table = Table(report_details, colWidths=[doc.width/4]*4)
-    report_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
-        ('BACKGROUND', (2, 0), (2, -1), colors.lightgrey),
-        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),
-        ('BOX', (0, 0), (-1, -1), 0.25, colors.black),
-    ]))
-    elements.append(report_table)
-    elements.append(Spacer(1, 0.2 * inch))
-
-    # Manpower data
-    manpower_data = [
-        ['AHCC LABOURS', '', 'SUPPLY LABOURS', ''],
-        ['Engineers', '8', 'S_Engineers', '0'],
-        ['inspectors', '0', 'S_Inspectors', '0'],
-        ['Foreman', '8', 'S_Foreman', '0'],
-        ['Leader', '13', 'S_Leader', '0'],
-        ['CraneOperator', '8', 'S_CraneOperator', '0'],
-        ['SteelFixer', '13', 'S_SteelFixer', '0'],
-        ['MoldFabricator', '0', 'S_MoldFabricator', '0'],
-        ['Welder', '13', 'S_Welder', '0'],
-        ['Carpentors', '0', 'S_Carpentors', '0'],
-        ['Masons', '26', 'S_Masons', '0'],
-        ['Reggers', '13', 'S_Riggers', '0'],
-        ['Helpers', '13', 'S_Helpers', '0'],
-        ['UnskilledLabours', '0', 'S_UnskilledLabours', '0'],
-    ]
-
-    manpower_table = Table(manpower_data, colWidths=[doc.width/4]*4)
-    manpower_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (1, 0), colors.lightgrey),
-        ('BACKGROUND', (2, 0), (3, 0), colors.lightgrey),
-        ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.black),
-        ('BOX', (0, 0), (-1, -1), 0.25, colors.black),
-    ]))
-    elements.append(manpower_table)
-
-    # Footer
-    elements.append(Spacer(1, 0.2 * inch))
-    footer_text = "Report Prepared By: _________________ Signature: _________________ Comments (If Any): _________________"
-    elements.append(Paragraph(footer_text, styles['Normal']))
-
-    # Build the PDF
-    doc.build(elements)
-
-    # FileResponse sets the Content-Disposition header so that browsers
-    # present the option to save the file.
-    buffer.seek(0)
-    return HttpResponse(buffer, content_type='application/pdf')
-
-
-
-
-
-# views.py
-from django.http import HttpResponse, Http404
-from django.shortcuts import get_object_or_404, render
-from .models import acessDB
-from django.template.loader import render_to_string
-from weasyprint import HTML
-from django.templatetags.static import static
-
-def dynamic_view(request, api_name, *args, **kwargs):
-    # Handle different api_name values
-    if api_name == 'technical-transmittal':
-        return technical_transmittal_form(request)
-    elif api_name == 'erection-report':
-        return erection_report(request)
-    elif api_name == 'manpower-report':
-        return manpower_report(request)
-    elif api_name == 'inspection-report':
-        return inspection_report(request)
-    elif api_name == 'delivery-order':
-        do_number = kwargs.get('do_number')
-        return delivery_order_view(request, do_number)
-    else:
-        raise Http404("Endpoint not found")
-    
-
-
-
-
-
-
-
-
-
-# views.py
-from django.shortcuts import render
-from django.http import HttpResponse
-from .models import acessDB
-from datetime import datetime
-from django.template.loader import render_to_string
-from weasyprint import HTML
-from django.db.models import Sum
+# To Acess URL: http://localhost:8000/api/main_api/inspection-report/
 
 def technical_transmittal_form(request):
+
+
+    css = CSS(string='''
+    @page {
+        size: A4;
+        margin: 10mm;
+    }
+    body {
+        width: 190mm; /* A4 page width minus margins */
+        margin: 0;
+        padding: 0;
+    }
+ ''')
     print("Inside technical_transmittal_form function")
     # Fetch dynamic data from the model or request
     project_number = request.GET.get('project_number')
@@ -676,7 +180,7 @@ def technical_transmittal_form(request):
     html_string = render_to_string('acessDB/technical_transmittal_form.html', context)
 
     # Convert the HTML to PDF
-    pdf_file = HTML(string=html_string).write_pdf()
+    pdf_file = HTML(string=html_string).write_pdf(stylesheets=[css])
 
     # Create a HTTP response for PDF download
     response = HttpResponse(pdf_file, content_type='application/pdf')
@@ -686,44 +190,64 @@ def technical_transmittal_form(request):
 
 
 
-# views.py
-# views.py
-from django.shortcuts import render
-from django.http import HttpResponse
-from .models import acessDB
-from django.template.loader import render_to_string
-from weasyprint import HTML
-from datetime import datetime
-from django.db.models import Sum
+# -----------------------------------------
+# View for Inspection-Report with WeasyPrint
+# -----------------------------------------
+
+# To Acess URL: http://localhost:8000/api/main_api/inspection-report/?project_number=1001
 
 def inspection_report(request):
-    # Fetch dynamic data from model or request
-    project_number = request.GET.get('project_number')
+    """
+    Generates a PDF for the Inspection Report using WeasyPrint.
+    Renders the report template with dynamic data and converts it to a PDF.
+    """
+
+    # CSS for PDF formatting
+    css = CSS(string='''
+    @page {
+        size: A4;
+        margin: 10mm;
+    }
+    body {
+        width: 190mm; /* A4 page width minus margins */
+        margin: 0;
+        padding: 0;
+    }
+    ''')
+
+    # Fetching dynamic data (replace with actual model data or request data)
+    project_number = request.GET.get('project_number', 'Unknown Project')
     data = acessDB.objects.filter(p_no=project_number)
     
-    # Process data
+    # Aggregating data from the database
     total_elements = data.count()
     total_length = data.aggregate(total_length=Sum('vol'))['total_length'] or 0
-    
-    # Context for the report
+
+    # Context to be passed to the HTML template
     context = {
         'company_name_arabic': 'الحلول الخرسانية المبتكرة ذ م م',
         'company_name_english': 'Innovative Concrete Solutions',
         'report_title': 'Inspection Report',
         'project_number': project_number,
         'report_date': datetime.now().strftime('%m/%d/%Y %I:%M:%S %p'),
-        'data': data,
+        'client': 'Client Name',  # Add actual data
+        'consultant': 'Consultant Name',  # Add actual data
+        'location': 'Project Location',  # Add actual data
+        'data': data,  # Table data
         'total_elements': total_elements,
         'total_length': total_length,
+        'current_date': datetime.now().strftime('%A, %B %d, %Y'),
+        'page_number': 1,  # Page number, update if you have pagination logic
+        'total_pages': 1,  # Can be calculated dynamically
     }
 
-    # Render the HTML template
+    # Render the HTML template with the context
     html_string = render_to_string('acessDB/inspection_report.html', context)
 
-    # Convert the HTML to PDF
-    pdf_file = HTML(string=html_string).write_pdf()
+    # Convert the rendered HTML to PDF
+    pdf_file = HTML(string=html_string).write_pdf(stylesheets=[css])
 
-    # Create a HTTP response for PDF download
+    # Create the PDF response
     response = HttpResponse(pdf_file, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="inspection_report_{project_number}.pdf"'
 
@@ -731,136 +255,236 @@ def inspection_report(request):
 
 
 
-# views.py
-from django.shortcuts import render
-from django.http import HttpResponse
-from datetime import datetime
-from django.template.loader import render_to_string
-from weasyprint import HTML
+# -----------------------------------------
+# View for Man-Power with WeasyPrint
+# -----------------------------------------
+
+
+# To acess URL: http://localhost:8000/api/main_api/manpower-report/?report_number=123&report_date=2024-09-21
 
 def manpower_report(request):
-    # Dynamic data from request or model
+
+    # Dynamic data from request or model (falling back to defaults)
     report_number = request.GET.get('report_number', '744')
     report_date = request.GET.get('report_date', datetime.now().strftime('%m/%d/%Y'))
-    
-    # Static data or example (you may fetch this from a model or other sources)
+
+    # Format current date for footer
+    current_date = datetime.now()
+    formatted_date = current_date.strftime('%A, %B %d, %Y')
+
+    # Example labour data, can be retrieved from a model or API in real implementation
     labour_data = {
-        'Engineers': {'ahcc_labours': 8, 'supply_labours': 0},
-        # (other labour data...)
+        'Engineers': {'ahcc_labours': 8, 'supply_labours': 3},
+        'Inspectors': {'ahcc_labours': 5, 'supply_labours': 2},
+        'Foreman': {'ahcc_labours': 4, 'supply_labours': 1},
+        'Leader': {'ahcc_labours': 3, 'supply_labours': 3},
+        'Crane Operator': {'ahcc_labours': 2, 'supply_labours': 2},
+        'Steel Fixer': {'ahcc_labours': 10, 'supply_labours': 8},
+        'Mold Fabricator': {'ahcc_labours': 7, 'supply_labours': 6},
+        'Welder': {'ahcc_labours': 6, 'supply_labours': 5},
+        'Carpenters': {'ahcc_labours': 9, 'supply_labours': 7},
+        'Masons': {'ahcc_labours': 12, 'supply_labours': 10},
+        'Riggers': {'ahcc_labours': 4, 'supply_labours': 3},
+        'Helpers': {'ahcc_labours': 15, 'supply_labours': 12},
+        'Unskilled Labours': {'ahcc_labours': 20, 'supply_labours': 18},
     }
-    
-    # Context for the report
+
+    # Context to pass to the HTML template
     context = {
         'company_name_arabic': 'الحلول الخرسانية المبتكرة ذ م م',
         'company_name_english': 'Innovative Concrete Solutions',
         'report_title': 'Manpower Report',
         'report_number': report_number,
         'report_date': report_date,
-        'labour_data': labour_data,
+        'current_date': datetime.now().strftime('%m/%d/%Y'),
+        'footer_date': formatted_date,
+        'labour_data': labour_data,  # Passing labour data to the template
+        'page_number': 1,
+        'total_pages': 1,  # This would be dynamic based on WeasyPrint pagination in a real implementation
     }
 
-    # Render the HTML template
-    html_string = render_to_string('acessDB/manpower_report.html', context)
+    # Render the HTML content from the template with the given context
+    html_content = render_to_string('acessDB/manpower_report.html', context)
 
-    # Convert the HTML to PDF
-    pdf_file = HTML(string=html_string).write_pdf()
+    # PDF rendering with WeasyPrint
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'inline; filename="manpower_report_{report_number}.pdf"'
 
-    # Create a HTTP response for PDF download
-    response = HttpResponse(pdf_file, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="manpower_report_{report_number}.pdf"'
+    # Define custom CSS if necessary (for page size, margins, etc.)
+    css = CSS(string='''
+    @page {
+        size: A4;
+        margin: 10mm;
+    }
+    body {
+        width: 190mm;
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+    }
+    ''')
+
+    # Generate and return the PDF
+    HTML(string=html_content, base_url=request.build_absolute_uri()).write_pdf(response, stylesheets=[css])
 
     return response
 
-# views.py
-from django.shortcuts import render
-from django.http import HttpResponse
-from .models import acessDB
-from datetime import datetime
-from django.template.loader import render_to_string
-from weasyprint import HTML
-from django.db.models import Sum
+
+  
+# -----------------------------------------
+# View for Erection Report with WeasyPrint
+# -----------------------------------------
+
+
+#  To Acess URL: http://localhost:8000/api/main_api/erection-report/?project_number=101
 
 def erection_report(request):
-    # Fetch dynamic data from model or request
+
+
+    css = CSS(string='''
+    @page {
+        size: A4;
+        margin: 10mm;
+    }
+    body {
+        width: 190mm; /* A4 page width minus margins */
+        margin: 0;
+        padding: 0;
+    }
+ ''')
+    # Fetch project number from GET parameters
     project_number = request.GET.get('project_number')
+    
+    if not project_number:
+        return HttpResponse("Project number is required", status=400)
+    
+    # Fetch data for the given project number
     data = acessDB.objects.filter(p_no=project_number)
     
-    # Process data
+    if not data.exists():
+        return HttpResponse(f"No data found for project number {project_number}", status=404)
+    
+    # Process data: count elements and calculate total length
     total_elements = data.count()
     total_length = data.aggregate(total_length=Sum('vol'))['total_length'] or 0
+
+    current_date = datetime.now()
+    formatted_date = current_date.strftime('%A, %B %d, %Y')
     
     # Context for rendering the template
     context = {
         'company_name_arabic': 'الحلول الخرسانية المبتكرة ذ م م',
         'company_name_english': 'Innovative Concrete Solutions',
         'report_title': 'Erection Report',
-        'project_number': project_number,
+        'project_no': project_number,  # Ensure these match the template variable names
+        'project_name': 'Project Name Placeholder',  # Add real data if available
+        'client': 'Client Placeholder',  # Add real data if available
+        'consultant': 'Consultant Placeholder',  # Add real data if available
+        'location': 'Location Placeholder',  # Add real data if available
         'report_date': datetime.now().strftime('%m/%d/%Y %I:%M:%S %p'),
-        'data': data,
+        'elements': data,  # Assuming 'elements' is the context variable in your template
         'total_elements': total_elements,
         'total_length': total_length,
+        'current_date': datetime.now().strftime('%m/%d/%Y'),
+        'footer_date': formatted_date,
+        'page_number': 1,  # WeasyPrint handles pagination, this might be used for custom content
+        'total_pages': 1,  # WeasyPrint handles pagination, this might be used for custom content
     }
-    
+
     # Render the HTML template to a string
     html_string = render_to_string('acessDB/erection_report.html', context)
 
-    # Convert the rendered HTML to a PDF
-    pdf_file = HTML(string=html_string).write_pdf()
+    # Convert the rendered HTML to a PDF using WeasyPrint
+    pdf_file = HTML(string=html_string).write_pdf(stylesheets=[css])
 
-    # Create a HTTP response to download the PDF
+    # Create an HTTP response to download the PDF
     response = HttpResponse(pdf_file, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="erection_report_{project_number}.pdf"'
 
     return response
 
+# -----------------------------------------
+# View for Delivery Order with WeasyPrint
+# -----------------------------------------
+
+
+#  To Acess URL: http://localhost:8000/api/main_api/delivery-order/?do_number=1001
+
+def delivery_order_pdf(request, do_number):
 
 
 
-from django.shortcuts import render
-from django.http import HttpResponse
-from django.template.loader import render_to_string
-from weasyprint import HTML
-from .models import acessDB
-from django.templatetags.static import static
+    css = CSS(string='''
+    @page {
+        size: A4;
+        margin: 10mm;
+    }
+    body {
+        width: 190mm; /* A4 page width minus margins */
+        margin: 0;
+        padding: 0;
+    }
+ ''')
+    # Fetch the data from the model using the provided delivery order number
+    order_data = acessDB.objects.filter(do=do_number)
+    
+    # Handle case where no data is found
+    if not order_data.exists():
+        return HttpResponse(f"No data found for Delivery Order Number: {do_number}", status=404)
 
-def delivery_order_view(request, do_number):
-    # Retrieve the data based on delivery order number (you can adjust the filtering logic as needed)
-    try:
-        order_data = acessDB.objects.get(do=do_number)
-    except acessDB.DoesNotExist:
-        order_data = None  # Handle the case where the delivery order does not exist
+    # Calculating totals for elements and volume
+    total_elements = order_data.count()
+    total_volume = order_data.aggregate(total_volume=Sum('vol'))['total_volume'] or 0
 
-    # Generate the URLs for the logos
-    logo_path_left = static('images/logo1.png')
-    logo_path_right = static('images/logo2.png')
+    # Extracting details from the first entry (assuming all entries have same project/order details)
+    first_entry = order_data.first()
 
-    # Prepare context for the template
+    # Context for rendering the template
     context = {
-        'order': order_data,
-        'logo_path_left': logo_path_left,
-        'logo_path_right': logo_path_right,
+        'logo_path_left': r"images\logo1.png",  # Update this with the correct logo path
+        'logo_path_right': 'path/to/al_heloul_logo.png',  # Update with the correct logo path
+        'order': {
+            'do': first_entry.do,
+            'delivery': first_entry.delivery.strftime('%m/%d/%Y'),
+            'project_name': 'Sample Project Name',  # Replace with actual project name if available
+            'p_no': first_entry.p_no,
+            'client': 'Client Placeholder',  # Replace with actual client name
+            'consultant': 'Consultant Placeholder',  # Replace with actual consultant name
+            'location': 'Location Placeholder',  # Replace with actual location
+            'transporter': first_entry.transporter
+        },
+        'elements': order_data,  # List of elements (from the model)
+        'total_elements': total_elements,
+        'total_volume': total_volume,
+        'quality_check_date': datetime.now().strftime('%m/%d/%Y'),
+        'quality_check_name': 'QC Inspector Name Placeholder',  # Replace with actual QC inspector name
+        'driver_name': 'Driver Name Placeholder',  # Replace with actual driver name
+        'vehicle_no': 'Vehicle No Placeholder',  # Replace with actual vehicle number
+        'driver_mobile': 'Driver Mobile Placeholder',  # Replace with actual driver mobile number
+        'footer_date': datetime.now().strftime('%A, %B %d, %Y'),
+        'page_number': 1,  # WeasyPrint handles pagination
+        'total_pages': 1,  # Set dynamically if needed
     }
 
-    # Render the HTML template with context
+    # Render the HTML template to a string
     html_string = render_to_string('acessDB/delivery_order.html', context)
 
-    # Create a PDF from the HTML string
-    html = HTML(string=html_string)
-    pdf = html.write_pdf()
+    # Convert the rendered HTML to a PDF using WeasyPrint
+    pdf_file = HTML(string=html_string).write_pdf(stylesheets=[css])
 
-    # Return the PDF as a response
-    response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename=delivery_order_{do_number}.pdf'
+    # Create an HTTP response to serve the PDF
+    response = HttpResponse(pdf_file, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="delivery_order_{do_number}.pdf"'
+
     return response
 
 
-# acessDB/views.py
-from django.http import HttpResponse, Http404
-from django.shortcuts import render
-from .models import acessDB
-from django.template.loader import render_to_string
-from weasyprint import HTML
-from django.templatetags.static import static
+
+
+
+# ----------------------------------------------------
+# View for Dynamic Generation with WeasyPrint
+# ----------------------------------------------------
 
 def dynamic_view(request, api_name, *args, **kwargs):
     # Strip leading/trailing spaces and newline characters
@@ -879,10 +503,11 @@ def dynamic_view(request, api_name, *args, **kwargs):
         return manpower_report(request)
     elif normalized_api_name == 'delivery-order':
         print("Accessing delivery_order_view view")
-        do_number = kwargs.get('do_number')
+        do_number = request.GET.get('do_number')
+        # do_number = kwargs.get('do_number')
         if do_number is None:
             raise Http404("Delivery order number is required")
-        return delivery_order_view(request, do_number)
+        return delivery_order_pdf(request, do_number)
     elif normalized_api_name == 'inspection-report':
         print("Accessing inspection_report view")
         return inspection_report(request)

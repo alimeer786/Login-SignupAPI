@@ -9,7 +9,7 @@ from .views import (
     technical_transmittal_form,
     erection_report,
     manpower_report,
-    delivery_order_view,
+    delivery_order_pdf,
     inspection_report,
     dynamic_view
 )
@@ -31,6 +31,6 @@ urlpatterns = [
     path('technical-transmittal/', technical_transmittal_form, name='technical_transmittal_form'),
     path('erection-report/', erection_report, name='erection_report'),
     path('manpower-report/', manpower_report, name='manpower_report'),
-    path('delivery-order/<int:do_number>/', delivery_order_view, name='delivery_order_pdf'),
+    path('delivery-order/<int:do_number>/', delivery_order_pdf, name='delivery_order_pdf'),
     path('inspection-report/', inspection_report, name='inspection_report'),
 ]
